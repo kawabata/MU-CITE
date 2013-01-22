@@ -1,3 +1,10 @@
+2013-01-23  KAWABATA Taichi  <kawabata.taichi@gmail.com>
+
+	* README.md : Added for simple documentation
+	* mu-cite.el : Modified to avoid APEL/FLIM dependencies.
+	* mu-register.el : Modified to avoid APEL/FLIM dependencies.
+	* mu-bbdb.el : Modified to be compatibile with BBDB3.
+
 2012-02-27  Katsumi Yamaoka  <yamaoka@jpl.org>
 
 	* mu-cite.el (mu-cite-remove-text-properties): Fix mismatched paren in

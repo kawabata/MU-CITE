@@ -3,6 +3,7 @@
 ;; Copyright (C) 1995,1996,1997,1998,1999 Free Software Foundation, Inc.
 
 ;; Author: Shuhei KOBAYASHI <shuhei@aqua.ocn.ne.jp>
+;;   (modified for BBDB3 by KAWABATA Taichi <kawabata.taichi _at_ gmail.com )
 ;; Maintainer: Katsumi Yamaoka <yamaoka@jpl.org>
 ;; Keywords: BBDB, citation, mail, news
 
@@ -23,10 +24,14 @@
 ;; the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
+;;; Commentary:
+
+;; Codes are modified to work with BBDB3.
+
 ;;; Code:
 
 (require 'mu-cite)
-(require 'bbdb)
+(require 'bbdb-com)
 
 (defvar mu-bbdb-history nil)
 
@@ -34,24 +39,22 @@
 ;;; @ BBDB interface
 ;;;
 
-(defun mu-bbdb-get-attr (addr)
+(defun mu-bbdb-get-attr (address-structure)
   "Extract attribute information from BBDB."
-  (let ((record (bbdb-search-simple nil addr)))
+  (let* ((mail (cadr address-structure))
+         (record (car (bbdb-search (bbdb-records) nil nil mail))))
     (if record
-	(bbdb-record-getprop record 'attribution))))
+	(bbdb-record-get-field record 'attribution))))
 
-(defun mu-bbdb-set-attr (attr addr)
+(defun mu-bbdb-set-attr (attr addr-structure)
   "Add attribute information to BBDB."
-  (let* ((bbdb-notice-hook nil)
-	 (record (bbdb-annotate-message-sender
-		  addr t
-		  (bbdb-invoke-hook-for-value
-		   bbdb/mail-auto-create-p)
+  (let* ((record (bbdb-annotate-message
+		  addr-structure
 		  t)))
     (if record
 	(progn
-	  (bbdb-record-putprop record 'attribution attr)
-	  (bbdb-change-record record nil)))))
+	  (bbdb-record-set-field (car record) 'attribution attr)
+	  (bbdb-change-record (car record) nil t)))))
 
 
 ;;; @ methods
@@ -65,7 +68,7 @@ Otherwise \">\" is returned.
 
 Notice that please use (mu-cite-get-value 'bbdb-prefix)
 instead of call the function directly."
-  (or (mu-bbdb-get-attr (mu-cite-get-value 'address))
+  (or (mu-bbdb-get-attr (mu-cite-get-value 'address-structure))
       ">"))
 
 ;;;###autoload
@@ -77,7 +80,7 @@ be registered to BBDB if the user wants it.
 
 Notice that please use (mu-cite-get-value 'bbdb-prefix-register)
 instead of call the function directly."
-  (let ((addr (mu-cite-get-value 'address)))
+  (let ((addr (mu-cite-get-value 'address-structure)))
     (or (mu-bbdb-get-attr addr)
 	(let* ((minibuffer-allow-text-properties nil)
 	       (return
@@ -103,7 +106,7 @@ the user wants it.
 
 Notice that please use (mu-cite-get-value 'bbdb-prefix-register-verbose)
 instead of call the function directly."
-  (let* ((addr (mu-cite-get-value 'address))
+  (let* ((addr (mu-cite-get-value 'address-structure))
 	 (attr (mu-bbdb-get-attr addr))
 	 (minibuffer-allow-text-properties nil)
 	 (return (mu-cite-remove-text-properties

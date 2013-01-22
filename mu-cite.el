@@ -26,6 +26,8 @@
 
 ;;; Commentary:
 
+;; (APEL/FLIM dependency is removed from this code.)
+
 ;; - How to use
 ;;   1. Bytecompile this file and copy it to the apropriate directory.
 ;;   2. Put the following lines in your ~/.emacs file:
@@ -43,12 +45,26 @@
 
 ;;; Code:
 
-;; For picking up the macros `char-next-index', `with-temp-buffer', etc.
-(require 'poem)
+;;; copied from APEL
 
-(require 'pcustom)
-(require 'std11)
-(require 'alist)
+(defun put-alist (key value alist)
+  "Set cdr of an element (KEY . ...) in ALIST to VALUE and return ALIST.
+If there is no such element, create a new pair (KEY . VALUE) and
+return a new alist whose car is the new pair and cdr is ALIST."
+  (let ((elm (assoc key alist)))
+    (if elm
+	(progn
+	  (setcdr elm value)
+	  alist)
+      (cons (cons key value) alist))))
+
+(defun set-alist (symbol key value)
+  "Set cdr of an element (KEY . ...) in the alist bound to SYMBOL to VALUE."
+  (or (boundp symbol)
+      (set symbol nil))
+  (set symbol (put-alist key value (symbol-value symbol))))
+
+;;; main
 
 (autoload 'mu-cite-get-prefix-method "mu-register")
 (autoload 'mu-cite-get-prefix-register-method "mu-register")
@@ -70,19 +86,13 @@
 
 (defmacro mu-cite-remove-text-properties (string)
   "Remove text properties from STRING which is read from minibuffer."
-  (cond ((featurep 'xemacs)
-	 `(let ((string (copy-sequence ,string)))
-	    (map-extents (function (lambda (extent maparg)
-				     (delete-extent extent)))
-			 string 0 (length string))
-	    string))
-	((or (boundp 'minibuffer-allow-text-properties);; Emacs 20.1 or later.
-	     (not (fboundp 'set-text-properties)));; under Emacs 19.7.
-	 string)
-	(t
-	 `(let ((string (copy-sequence ,string)))
-	    (set-text-properties 0 (length string) nil string)
-	    string))))
+  (if (or (featurep 'xemacs)
+	  (boundp 'minibuffer-allow-text-properties);; Emacs 20.1 or later.
+	  (not (fboundp 'set-text-properties)));; under Emacs 19.7.
+      string
+    (` (let ((obj (copy-sequence (, string))))
+	 (set-text-properties 0 (length obj) nil obj)
+	 obj))))
 
 
 ;;; @ set up
@@ -119,17 +129,16 @@
 	(cons 'address-structure
 	      (function
 	       (lambda ()
-		 (car
-		  (std11-parse-address-string (mu-cite-get-value 'from))))))
+		 (mail-extract-address-components (mu-cite-get-value 'from)))))
 	(cons 'full-name
 	      (function
 	       (lambda ()
-		 (std11-full-name-string
+		 (car
 		  (mu-cite-get-value 'address-structure)))))
 	(cons 'address
 	      (function
 	       (lambda ()
-		 (std11-address-string
+		 (cadr
 		  (mu-cite-get-value 'address-structure)))))
 	(cons 'id
 	      (function
@@ -266,7 +275,7 @@ Each elements must be a string or a method name."
   "Return the value of the header field NAME.
 If the field is not found in the header, a method function which is
 registered in variable `mu-cite-get-field-value-method-alist' is called."
-  (or (std11-field-body name)
+  (or (mail-fetch-field name)
       (let ((method (assq major-mode mu-cite-get-field-value-method-alist)))
 	(if method
 	    (funcall (cdr method) name)))))
@@ -385,38 +394,11 @@ function according to the agreed upon standard."
   :type 'string
   :group 'mu-cite)
 
-(eval-and-compile
-  ;; Don't use the function `char-category' which may have been
-  ;; defined by emu.el.  Anyway, the best way is not to use emu.el.
-  (if (and (fboundp 'char-category)
-	   (subrp (symbol-function 'char-category)))
-      (defalias 'mu-cite-char-category 'char-category)
-    (defun-maybe-cond mu-cite-char-category (character &optional table)
-      "Return a string of category mnemonics for CHARACTER in TABLE.
-CHARACTER can be any multilingual characters,
-TABLE defaults to the current buffer's category table (it is currently
-ignored)."
-      ((and (subr-fboundp 'char-category-set)
-	    (subr-fboundp 'category-set-mnemonics))
-       (category-set-mnemonics (char-category-set character)))
-      ((and (fboundp 'char-category-list)
-	    ;; `char-category-list' returns a list of characters
-	    ;; in XEmacs 21.2.25 and later, otherwise integers.
-	    (characterp (car-safe (char-category-list ?a))))
-       (concat (char-category-list character)))
-      ((fboundp 'char-category-list)
-       (mapconcat (lambda (chr)
-		    (char-to-string (int-char chr)))
-		  (char-category-list character)
-		  ""))
-      ((boundp 'NEMACS)
-       (if (< (char-int character) 128)
-	   "al"
-	 "j"))
-      (t
-       (if (< (char-int character) 128)
-	   "al"
-	 "l")))))
+(defun char-category (character)
+  "Return a string of category mnemonics for CHAR in TABLE.
+CHAR can be any multilingual character,
+TABLE defaults to the current buffer's category table."
+  (category-set-mnemonics (char-category-set character)))
 
 (defun detect-paragraph-cited-prefix ()
   (save-excursion
@@ -497,7 +479,8 @@ to 70. :-)"
 		(e (match-end 0)))
 	    (delete-region b e)
 	    (if (and (> b (point-min))
-		     (let ((cat (mu-cite-char-category (char-before b))))
+		     (let ((cat (char-category
+				 (char-before b))))
 		       (or (string-match "a" cat)
 			   (string-match "l" cat))))
 		(insert " "))))
